@@ -30,6 +30,11 @@ import android.net.wifi.p2p.WifiP2pConfig
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.ServerSocket
+import java.io.OutputStreamWriter
+import java.net.Socket
 
 
 class MainActivity : ComponentActivity() {
@@ -53,6 +58,11 @@ class MainActivity : ComponentActivity() {
     val connectionInfoListenerPublic = WifiP2pManager.ConnectionInfoListener { info ->
         isGroupOwner = info.isGroupOwner
         groupOwnerIp = info.groupOwnerAddress?.hostAddress
+
+        if (info.isGroupOwner) {
+            startServerSocket()
+        }
+
 
         Log.d("P2P", "¿Es el grupo dueño?: $isGroupOwner")
         Log.d("P2P", "Dirección del grupo: $groupOwnerIp")
@@ -89,6 +99,7 @@ class MainActivity : ComponentActivity() {
                     GreetingWithButton(
                         onDiscoverClick = { discoverDevices() },
                         onDeviceClick = { device -> connectToDevice(device) },
+                        onSendMessageClick = { sendMessageToServer("Hola desde el cliente") },
                         devices = devices,
                         isGroupOwner = isGroupOwner,
                         groupOwnerIp = groupOwnerIp,
@@ -162,6 +173,44 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun startServerSocket() {
+        Thread {
+            try {
+                val serverSocket = ServerSocket(8888)
+                Log.d("P2P-SOCKET", "Servidor iniciado. Esperando conexión...")
+
+                val client = serverSocket.accept()
+                Log.d("P2P-SOCKET", "Cliente conectado: ${client.inetAddress.hostAddress}")
+
+                val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+                val message = reader.readLine()
+                Log.d("P2P-SOCKET", "Mensaje recibido: $message")
+
+                client.close()
+                serverSocket.close()
+            } catch (e: Exception) {
+                Log.e("P2P-SOCKET", "Error en el servidor: ${e.message}")
+            }
+        }.start()
+    }
+
+    fun sendMessageToServer(message: String) {
+        groupOwnerIp?.let { ip ->
+            Thread {
+                try {
+                    val socket = Socket(ip, 8888)
+                    val writer = OutputStreamWriter(socket.getOutputStream())
+                    writer.write(message + "\n")
+                    writer.flush()
+                    socket.close()
+                    Log.d("P2P-SOCKET", "Mensaje enviado al servidor: $message")
+                } catch (e: Exception) {
+                    Log.e("P2P-SOCKET", "Error al enviar mensaje: ${e.message}")
+                }
+            }.start()
+        } ?: Log.e("P2P-SOCKET", "IP del servidor no disponible")
+    }
+
 
     override fun onResume() {
         super.onResume()
@@ -174,18 +223,19 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
-
 @Composable
 fun GreetingWithButton(
     onDiscoverClick: () -> Unit,
     onDeviceClick: (WifiP2pDevice) -> Unit,
+    onSendMessageClick: () -> Unit,
     modifier: Modifier = Modifier,
     devices: List<WifiP2pDevice>,
     isGroupOwner: Boolean?,
     groupOwnerIp: String?
 ) {
     Column(modifier = modifier.padding(16.dp)) {
+
+        // Botón para buscar dispositivos
         Button(
             onClick = onDiscoverClick,
             modifier = Modifier
@@ -195,6 +245,7 @@ fun GreetingWithButton(
             Text(text = "Buscar dispositivos")
         }
 
+        // Lista de dispositivos detectados
         Text(text = "Dispositivos detectados:")
 
         LazyColumn {
@@ -207,7 +258,10 @@ fun GreetingWithButton(
                 ) {
                     Column {
                         Text(text = device.deviceName.ifBlank { "Sin nombre" })
-                        Text(text = device.deviceAddress, style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            text = device.deviceAddress,
+                            style = MaterialTheme.typography.labelSmall
+                        )
                     }
                 }
             }
@@ -215,6 +269,7 @@ fun GreetingWithButton(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Mostrar rol del dispositivo
         Text(
             text = when (isGroupOwner) {
                 true -> "🔵 Este dispositivo es el servidor (Group Owner)"
@@ -224,6 +279,7 @@ fun GreetingWithButton(
             style = MaterialTheme.typography.bodyMedium
         )
 
+        // Mostrar IP del servidor
         groupOwnerIp?.let { ip ->
             Text(
                 text = "IP del servidor: $ip",
@@ -231,9 +287,18 @@ fun GreetingWithButton(
             )
         }
 
+        // Solo el cliente puede enviar mensajes
+        if (isGroupOwner == false) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onSendMessageClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Enviar mensaje al servidor")
+            }
+        }
     }
 }
-
 
 @Preview(showBackground = true)
 @Composable
@@ -242,6 +307,7 @@ fun GreetingPreview() {
         GreetingWithButton(
             onDiscoverClick = {},
             onDeviceClick = {},
+            onSendMessageClick = {},
             devices = emptyList(),
             isGroupOwner = null,
             groupOwnerIp = null
