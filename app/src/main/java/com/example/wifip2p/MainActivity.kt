@@ -19,6 +19,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.wifip2p.ui.theme.WifiP2PTheme
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
 
@@ -32,15 +37,22 @@ class MainActivity : ComponentActivity() {
     // Listeners públicos que usará el BroadcastReceiver
     val peerListListenerPublic = WifiP2pManager.PeerListListener { peers ->
         Log.d("P2P", "Dispositivos encontrados: ${peers.deviceList.size}")
+        devices.clear()
         for (device in peers.deviceList) {
-            Log.d("P2P", "Dispositivo: ${device.deviceName} - ${device.deviceAddress}")
+            val name = device.deviceName.ifBlank { "Sin nombre" }
+            val address = device.deviceAddress
+            devices.add("$name\n$address")
         }
     }
+
 
     val connectionInfoListenerPublic = WifiP2pManager.ConnectionInfoListener { info ->
         Log.d("P2P", "¿Es el grupo dueño?: ${info.isGroupOwner}")
         Log.d("P2P", "Dirección del grupo: ${info.groupOwnerAddress?.hostAddress}")
     }
+
+    val devices = mutableStateListOf<String>()
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,6 +82,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     GreetingWithButton(
                         onDiscoverClick = { discoverDevices() },
+                        devices = devices,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -128,13 +141,34 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+
 @Composable
-fun GreetingWithButton(onDiscoverClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(
-        onClick = onDiscoverClick,
-        modifier = modifier
-    ) {
-        Text(text = "Buscar dispositivos")
+fun GreetingWithButton(
+    onDiscoverClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    devices: List<String>
+) {
+    Column(modifier = modifier.padding(16.dp)) {
+        Button(
+            onClick = onDiscoverClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            Text(text = "Buscar dispositivos")
+        }
+
+        Text(text = "Dispositivos detectados:")
+
+        LazyColumn {
+            items(devices) { device ->
+                Text(
+                    text = device,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+        }
     }
 }
 
@@ -142,6 +176,9 @@ fun GreetingWithButton(onDiscoverClick: () -> Unit, modifier: Modifier = Modifie
 @Composable
 fun GreetingPreview() {
     WifiP2PTheme {
-        GreetingWithButton(onDiscoverClick = {})
+        GreetingWithButton(
+            onDiscoverClick = {},
+            devices = listOf("Dispositivo de ejemplo\n00:11:22:33:44:55")
+        )
     }
 }
