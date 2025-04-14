@@ -1,5 +1,6 @@
 package com.example.wifip2p
 
+//import android.net.wifi.p2p.WpsInfo
 import android.Manifest
 import android.content.IntentFilter
 import android.content.pm.PackageManager
@@ -24,6 +25,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.unit.dp
+import android.net.wifi.p2p.WifiP2pDevice
+import android.net.wifi.p2p.WifiP2pConfig
+
 
 class MainActivity : ComponentActivity() {
 
@@ -38,12 +42,9 @@ class MainActivity : ComponentActivity() {
     val peerListListenerPublic = WifiP2pManager.PeerListListener { peers ->
         Log.d("P2P", "Dispositivos encontrados: ${peers.deviceList.size}")
         devices.clear()
-        for (device in peers.deviceList) {
-            val name = device.deviceName.ifBlank { "Sin nombre" }
-            val address = device.deviceAddress
-            devices.add("$name\n$address")
-        }
+        devices.addAll(peers.deviceList)
     }
+
 
 
     val connectionInfoListenerPublic = WifiP2pManager.ConnectionInfoListener { info ->
@@ -51,7 +52,9 @@ class MainActivity : ComponentActivity() {
         Log.d("P2P", "Dirección del grupo: ${info.groupOwnerAddress?.hostAddress}")
     }
 
-    val devices = mutableStateListOf<String>()
+
+    val devices = mutableStateListOf<WifiP2pDevice>()
+
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,6 +85,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     GreetingWithButton(
                         onDiscoverClick = { discoverDevices() },
+                        onDeviceClick = { device -> connectToDevice(device) },
                         devices = devices,
                         modifier = Modifier.padding(innerPadding)
                     )
@@ -130,6 +134,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun connectToDevice(device: WifiP2pDevice) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED
+        ) {
+            val config = WifiP2pConfig().apply {
+                deviceAddress = device.deviceAddress
+                wps.setup = 0 // 0 equivale a WpsInfo.PBC (Push Button Configuration)
+            }
+
+            manager.connect(channel, config, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    Log.d("P2P", "Conexión iniciada con ${device.deviceName}")
+                }
+
+                override fun onFailure(reason: Int) {
+                    Log.e("P2P", "Error al conectar con ${device.deviceName}, código: $reason")
+                }
+            })
+        } else {
+            Log.w("P2P", "Falta permiso NEARBY_WIFI_DEVICES para conectar")
+        }
+    }
+
+
     override fun onResume() {
         super.onResume()
         registerReceiver(receiver, intentFilter)
@@ -146,8 +174,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun GreetingWithButton(
     onDiscoverClick: () -> Unit,
+    onDeviceClick: (WifiP2pDevice) -> Unit,
     modifier: Modifier = Modifier,
-    devices: List<String>
+    devices: List<WifiP2pDevice>
 ) {
     Column(modifier = modifier.padding(16.dp)) {
         Button(
@@ -163,14 +192,22 @@ fun GreetingWithButton(
 
         LazyColumn {
             items(devices) { device ->
-                Text(
-                    text = device,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+                Button(
+                    onClick = { onDeviceClick(device) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Column {
+                        Text(text = device.deviceName.ifBlank { "Sin nombre" })
+                        Text(text = device.deviceAddress, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         }
     }
 }
+
 
 @Preview(showBackground = true)
 @Composable
@@ -178,7 +215,9 @@ fun GreetingPreview() {
     WifiP2PTheme {
         GreetingWithButton(
             onDiscoverClick = {},
-            devices = listOf("Dispositivo de ejemplo\n00:11:22:33:44:55")
+            onDeviceClick = {},
+            devices = emptyList()
         )
     }
 }
+
