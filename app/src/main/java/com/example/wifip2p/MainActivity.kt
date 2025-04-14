@@ -27,6 +27,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.unit.dp
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pConfig
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 
 class MainActivity : ComponentActivity() {
@@ -35,6 +38,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var channel: WifiP2pManager.Channel
     private lateinit var receiver: WifiDirectBroadcastReceiver
     private lateinit var intentFilter: IntentFilter
+    var isGroupOwner by mutableStateOf<Boolean?>(null)
+    var groupOwnerIp by mutableStateOf<String?>(null)
 
     private val PERMISSION_REQUEST_CODE = 1001
 
@@ -45,17 +50,15 @@ class MainActivity : ComponentActivity() {
         devices.addAll(peers.deviceList)
     }
 
-
-
     val connectionInfoListenerPublic = WifiP2pManager.ConnectionInfoListener { info ->
-        Log.d("P2P", "¿Es el grupo dueño?: ${info.isGroupOwner}")
-        Log.d("P2P", "Dirección del grupo: ${info.groupOwnerAddress?.hostAddress}")
+        isGroupOwner = info.isGroupOwner
+        groupOwnerIp = info.groupOwnerAddress?.hostAddress
+
+        Log.d("P2P", "¿Es el grupo dueño?: $isGroupOwner")
+        Log.d("P2P", "Dirección del grupo: $groupOwnerIp")
     }
 
-
     val devices = mutableStateListOf<WifiP2pDevice>()
-
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,6 +90,8 @@ class MainActivity : ComponentActivity() {
                         onDiscoverClick = { discoverDevices() },
                         onDeviceClick = { device -> connectToDevice(device) },
                         devices = devices,
+                        isGroupOwner = isGroupOwner,
+                        groupOwnerIp = groupOwnerIp,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -176,7 +181,9 @@ fun GreetingWithButton(
     onDiscoverClick: () -> Unit,
     onDeviceClick: (WifiP2pDevice) -> Unit,
     modifier: Modifier = Modifier,
-    devices: List<WifiP2pDevice>
+    devices: List<WifiP2pDevice>,
+    isGroupOwner: Boolean?,
+    groupOwnerIp: String?
 ) {
     Column(modifier = modifier.padding(16.dp)) {
         Button(
@@ -205,6 +212,25 @@ fun GreetingWithButton(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = when (isGroupOwner) {
+                true -> "🔵 Este dispositivo es el servidor (Group Owner)"
+                false -> "🟢 Este dispositivo es el cliente"
+                null -> "⚪ Aún no hay conexión establecida"
+            },
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        groupOwnerIp?.let { ip ->
+            Text(
+                text = "IP del servidor: $ip",
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+
     }
 }
 
@@ -216,8 +242,9 @@ fun GreetingPreview() {
         GreetingWithButton(
             onDiscoverClick = {},
             onDeviceClick = {},
-            devices = emptyList()
+            devices = emptyList(),
+            isGroupOwner = null,
+            groupOwnerIp = null
         )
     }
 }
-
