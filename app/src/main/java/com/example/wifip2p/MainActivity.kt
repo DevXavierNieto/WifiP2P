@@ -177,22 +177,27 @@ class MainActivity : ComponentActivity() {
         Thread {
             try {
                 val serverSocket = ServerSocket(8888)
-                Log.d("P2P-SOCKET", "Servidor iniciado. Esperando conexión...")
+                Log.d("P2P-SOCKET", "Servidor iniciado. Esperando conexiones...")
 
-                val client = serverSocket.accept()
-                Log.d("P2P-SOCKET", "Cliente conectado: ${client.inetAddress.hostAddress}")
+                while (true) {
+                    val client = serverSocket.accept()
+                    Log.d("P2P-SOCKET", "Cliente conectado: ${client.inetAddress.hostAddress}")
 
-                val reader = BufferedReader(InputStreamReader(client.getInputStream()))
-                val message = reader.readLine()
-                Log.d("P2P-SOCKET", "Mensaje recibido: $message")
+                    val reader = BufferedReader(InputStreamReader(client.getInputStream()))
+                    val message = reader.readLine()
+                    Log.d("P2P-SOCKET", "Mensaje recibido: $message")
 
-                client.close()
-                serverSocket.close()
+                    client.close()
+                }
+
+                // serverSocket.close()  <-- ¡NO lo cierres si quieres seguir aceptando más clientes!
+
             } catch (e: Exception) {
                 Log.e("P2P-SOCKET", "Error en el servidor: ${e.message}")
             }
         }.start()
     }
+
 
     fun sendMessageToServer(message: String) {
         groupOwnerIp?.let { ip ->
